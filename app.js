@@ -1,3 +1,8 @@
+// Register Service Worker for PWA
+if('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('Service Worker Failed:', err));
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // ---- Elements ----
     const loginScreen = document.getElementById('login-screen');
@@ -6,15 +11,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const scanProgress = document.getElementById('scan-progress');
     const scanStatusText = document.getElementById('scan-status-text');
     const dashboardScreen = document.getElementById('dashboard-screen');
+    
+    // Auth Elements
     const authForm = document.getElementById('auth-form');
+    const toggleBtn = document.getElementById('auth-toggle-btn');
+    const toggleText = document.getElementById('switch-prompt');
+    const authTitle = document.getElementById('auth-title');
+    const authSubtitle = document.getElementById('auth-subtitle');
     const authBtn = document.getElementById('auth-btn');
-    const authToggleBtn = document.getElementById('auth-toggle-btn');
-    const switchPrompt = document.getElementById('switch-prompt');
+    
     const nameGroup = document.getElementById('name-group');
-    const nameInput = document.getElementById('name-input');
-    const emailInput = document.getElementById('email-input');
-    const pwdInput = document.getElementById('pwd-input');
+    const nameInput = document.getElementById('auth-name');
+    const emailInput = document.getElementById('auth-email');
+    const pwdInput = document.getElementById('auth-password');
     const authError = document.getElementById('auth-error');
+
+    const sendCodeBtn = document.getElementById('send-code-btn');
+    const verifyCodeGroup = document.getElementById('verify-code-group');
+    const authCodeInput = document.getElementById('auth-code');
     
     let isSignupMode = false;
     let currentUserEmail = 'demo';
@@ -23,37 +37,92 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Logic ----
     
     // 1. Handle Authentication Toggle
-    authToggleBtn.addEventListener('click', (e) => {
-        e.preventDefault();
+    function toggleAuthMode() {
         isSignupMode = !isSignupMode;
-        authError.style.display = 'none';
-
-        if(isSignupMode) {
-            nameGroup.style.display = 'flex';
-            nameInput.required = true;
+        if (isSignupMode) {
+            authTitle.textContent = 'Incle 시작하기';
+            authSubtitle.textContent = '이메일 인증으로 안전하게 계정을 만드세요.';
             authBtn.textContent = '새 계정 만들기';
-            switchPrompt.textContent = '이미 계정이 있으신가요?';
-            authToggleBtn.textContent = '로그인';
+            toggleText.innerHTML = '이미 계정이 있으신가요? <a href="#" id="auth-toggle-btn">로그인</a>';
+            nameGroup.style.display = 'block';
+            nameInput.required = true;
+            sendCodeBtn.style.display = 'block';
+            verifyCodeGroup.style.display = 'block';
+            authCodeInput.required = true;
         } else {
+            authTitle.textContent = '다시 오셨군요!';
+            authSubtitle.textContent = '이메일과 비밀번호를 입력해주세요.';
+            authBtn.textContent = '로그인하여 시작하기';
+            toggleText.innerHTML = '계정이 없으신가요? <a href="#" id="auth-toggle-btn">회원가입</a>';
             nameGroup.style.display = 'none';
             nameInput.required = false;
-            authBtn.textContent = '로그인하여 시작하기';
-            switchPrompt.textContent = '계정이 없으신가요?';
-            authToggleBtn.textContent = '회원가입';
+            sendCodeBtn.style.display = 'none';
+            verifyCodeGroup.style.display = 'none';
+            authCodeInput.required = false;
         }
-    });
+        authError.style.display = 'none';
+        authForm.reset();
+        
+        // Re-bind the toggle button since we replaced HTML
+        document.getElementById('auth-toggle-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleAuthMode();
+        });
+    }
 
-    // Handle Authentication Submit
+    if(toggleBtn) {
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleAuthMode();
+        });
+    }
+
+    // Send Code Button Logic
+    if(sendCodeBtn) {
+        sendCodeBtn.addEventListener('click', async () => {
+            const email = emailInput.value.trim();
+            if(!email) { alert('이메일을 먼저 입력해주세요.'); return; }
+            
+            sendCodeBtn.disabled = true;
+            sendCodeBtn.textContent = '발송 중...';
+            authError.style.display = 'none';
+            
+            try {
+                const res = await fetch('/api/send-code', {
+                    method: 'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({email})
+                });
+                if(res.ok) {
+                    alert('인증번호가 발송되었습니다.\n(참고: 데모 코드이므로 터미널/Render 로그에 6자리 번호가 출력됩니다)');
+                    verifyCodeGroup.style.display = 'block';
+                    sendCodeBtn.textContent = '재전송';
+                } else {
+                    const data = await res.json();
+                    authError.textContent = data.detail || '발송 실패';
+                    authError.style.display = 'block';
+                    sendCodeBtn.textContent = '인증번호 받기';
+                }
+            } catch(e) {
+                authError.textContent = '서버 통신 오류';
+                authError.style.display = 'block';
+                sendCodeBtn.textContent = '인증번호 받기';
+            }
+            sendCodeBtn.disabled = false;
+        });
+    }
+
+    // Form Submit (Signup or Login)
     authForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        authError.style.display = 'none';
         
         const email = emailInput.value.trim();
         const pwd = pwdInput.value;
         const name = nameInput.value.trim();
+        const code = authCodeInput.value.trim();
 
         const endpoint = isSignupMode ? '/api/signup' : '/api/login';
-        const payload = isSignupMode ? { email, password: pwd, name } : { email, password: pwd };
+        const payload = isSignupMode ? { email, password: pwd, name, verification_code: code } : { email, password: pwd };
 
         authBtn.disabled = true;
         authBtn.textContent = '처리 중...';
@@ -71,18 +140,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 authBtn.disabled = false;
                 authBtn.textContent = isSignupMode ? '새 계정 만들기' : '로그인하여 시작하기';
             } else {
-                localStorage.setItem('subsync_user_' + email, JSON.stringify(data.user)); 
-                
                 if (isSignupMode) {
-                    await fetch(`/api/sync/${email}`, { method: 'POST' });
+                    // Sign-up successful, DO NOT login instantly.
+                    alert('회원가입이 완료되었습니다! 보안을 위해 로그인 창에서 새로 접속해 주세요.');
+                    toggleAuthMode();
+                    emailInput.value = email; // Pre-fill
+                    authBtn.disabled = false;
+                    authBtn.textContent = '로그인하여 시작하기';
+                } else {
+                    // Login successful
+                    localStorage.setItem('subsync_user_' + email, JSON.stringify(data.user));
+                    
+                    // Trigger sync here instead of signup
+                    await fetch(`/api/sync/${email}`, { method: 'POST' }).catch(e=>console.log(e));
+                    
+                    loginSuccess(data.user);
                 }
-
-                loginSuccess(data.user);
             }
         })
         .catch(err => {
             console.error('Auth error', err);
-            authError.textContent = '서버 통신 실패. (터미널에서 python main.py 로 서버를 켜주세요)';
+            authError.textContent = '서버 통신 실패. (터미널에서 python main.py 로 백엔드가 켜져있나요?)';
             authError.style.display = 'block';
             authBtn.disabled = false;
             authBtn.textContent = isSignupMode ? '새 계정 만들기' : '로그인하여 시작하기';
@@ -99,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(profileEmail) profileEmail.textContent = user.email;
 
         if(scanningEmailText && user.email) {
-            scanningEmailText.innerHTML = `<strong>${user.email}</strong> 수신함을 스캔하여<br>구독 결제 내역을 자동으로 찾는 중입니다.`;
+            scanningEmailText.innerHTML = `<strong>${user.email}</strong> 수신함을 스캔하여<br>구독 결제 내역을 점검중입니다.`;
         }
 
         // Simple animation logic to transition screens
@@ -117,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function runScannerAnimation() {
-        let progress = 0;
+
         const scanSteps = [
             { p: 15, text: "최근 3개월 결제 영수증 확인 중..." },
             { p: 45, text: "넷플릭스, 유튜브 등 서비스 식별 중..." },
@@ -125,20 +203,22 @@ document.addEventListener('DOMContentLoaded', () => {
             { p: 100, text: "동기화 완료!" }
         ];
 
+        let progress = 0;
         let stepIdx = 0;
 
         const interval = setInterval(() => {
             progress += Math.floor(Math.random() * 15) + 5;
-            if(progress >= 100) progress = 100;
+            if(progress > 100) progress = 100;
             
-            scanProgress.style.width = progress + '%';
-            
-            while(stepIdx < scanSteps.length && progress >= scanSteps[stepIdx].p) {
-                scanStatusText.textContent = scanSteps[stepIdx].text;
+            if(scanProgress) scanProgress.style.width = progress + '%';
+
+            // Find current text
+            if(stepIdx < scanSteps.length && progress >= scanSteps[stepIdx].p) {
+                if(scanStatusText) scanStatusText.textContent = scanSteps[stepIdx].text;
                 stepIdx++;
             }
 
-            if(progress >= 100) {
+            if(progress === 100) {
                 clearInterval(interval);
                 setTimeout(() => {
                     scanningScreen.style.opacity = '0';
@@ -157,6 +237,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 350);
     }
 
+    // 2. Format Currency
+    const formatSeq = (num) => {
+        return '₩' + num.toLocaleString('ko-KR');
+    };
+
     async function fetchAndInitDashboard() {
         try {
             const res = await fetch(`/api/subscriptions/${currentUserEmail}`);
@@ -172,40 +257,33 @@ document.addEventListener('DOMContentLoaded', () => {
         renderChart();
     }
 
-    // 4. Render Subscription List
+    // 4. Render Subscriptions
     function renderSubscriptions() {
-        const listEl = document.getElementById('subs-list');
-        const countEl = document.getElementById('sub-count');
+        const listEl = document.getElementById('sub-list');
         listEl.innerHTML = '';
         
-        countEl.textContent = subscriptions.length;
-
-        // Current Date Info for warnings
-        const today = new Date();
-        const currentDay = today.getDate();
-
         subscriptions.forEach(sub => {
-            // Calculate days left
-            let daysLeft = sub.billingDate - currentDay;
-            if (daysLeft < 0) {
-                // Next month billing
-                const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-                daysLeft = (daysInMonth - currentDay) + sub.billingDate;
-            }
+            const today = new Date().getDate();
+            let daysLeft = sub.billingDate - today;
+            let isWarning = false;
 
-            const isWarning = daysLeft <= 5 && daysLeft >= 0;
+            if (daysLeft < 0) daysLeft += 30; // approx 30 days month
+            
+            if (daysLeft <= 3) {
+                isWarning = true;
+            }
 
             const itemHTML = `
                 <div class="sub-item">
-                    <div class="sub-icon ${sub.bgClass}">
-                        <i class="ph ${sub.iconClass}"></i>
-                    </div>
                     <div class="sub-info">
-                        <div class="sub-name">${sub.name}</div>
+                        <div class="sub-icon ${sub.bgClass}">
+                            <i class="ph ${sub.iconClass}"></i>
+                        </div>
                         <div class="sub-meta">
-                            <span>매월 ${sub.billingDate}일 결제</span>
+                            <h4>${sub.name}</h4>
+                            <span>매월 ${sub.billingDate}일</span>
                             <div class="meta-divider"></div>
-                            <span class="${isWarning ? 'warning-text' : ''}">${daysLeft === 0 ? '오늘 결제' : `D-${daysLeft} 해지 가능`}</span>
+                            <span class="${isWarning ? 'warning-text' : ''}">${daysLeft === 0 ? '오늘 결제' : `D-${daysLeft} 전 취소 가능`}</span>
                         </div>
                     </div>
                     <div>
@@ -223,9 +301,16 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Count up animation
         const totalEl = document.getElementById('total-amount');
+        if(!totalEl) return;
+        
         let current = 0;
         const increment = total / 40; // 40 steps
         
+        if (total === 0) {
+            totalEl.textContent = formatSeq(0);
+            return;
+        }
+
         const countInterval = setInterval(() => {
             current += increment;
             if (current >= total) {
@@ -239,6 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 6. Check Reminders
     function checkReminders() {
+        if(subscriptions.length === 0) return;
         const today = new Date().getDate();
         // Find if any sub is due within 3 days
         const urgent = subscriptions.find(sub => {
@@ -249,11 +335,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (urgent) {
             const alertBox = document.getElementById('reminder-alert');
-            alertBox.style.display = 'flex';
-            alertBox.querySelector('.alert-text').innerHTML = `
-                <strong>${urgent.name}</strong> 결제일이 곧 다가옵니다! 
-                사용하지 않는다면 해지를 고려해보세요.
-            `;
+            if (alertBox) {
+                alertBox.style.display = 'flex';
+                alertBox.querySelector('.alert-text').innerHTML = `
+                    <strong>${urgent.name}</strong> 결제일이 임박했습니다! 
+                    필요하지 않다면 취소를 고려해보세요.
+                `;
+            }
         }
     }
 
@@ -263,6 +351,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!ctx) return;
         const ctx2d = ctx.getContext('2d');
         
+        if (subscriptions.length === 0) {
+            // Optional empty state chart
+            return;
+        }
+
         // Map data safely
         const labels = subscriptions.map(s => s.name.split(' ')[0]); // Get first word for brevity
         const data = subscriptions.map(s => s.price);
@@ -419,11 +512,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Auto-login check (Session restore)
+    let autoLogged = false;
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('subsync_user_')) {
             const userData = JSON.parse(localStorage.getItem(key));
             if (userData && userData.email) {
+                autoLogged = true;
                 loginSuccess(userData);
                 break;
             }

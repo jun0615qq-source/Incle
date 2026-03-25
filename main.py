@@ -5,8 +5,12 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import os
+from datetime import datetime
+import random
+import smtplib
+from email.message import EmailMessage
 
-app = FastAPI(title="SubSync Production API")
+app = FastAPI(title="Incle API")
 
 # DB Setup (SQLite for production simplicity)
 SQLALCHEMY_DATABASE_URL = "sqlite:///./subsync.db"
@@ -33,6 +37,13 @@ class DBSubscription(Base):
     bgClass = Column(String)
     user_email = Column(String, index=True)
 
+class VerificationCode(Base):
+    __tablename__ = "verification_codes"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, index=True)
+    code = Column(String)
+    expires_at = Column(Integer)
+
 Base.metadata.create_all(bind=engine)
 
 # Dependency
@@ -48,10 +59,14 @@ class UserCreate(BaseModel):
     email: str
     password: str
     name: str
+    verification_code: str
 
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class EmailRequest(BaseModel):
+    email: str
 
 class SubscriptionCreate(BaseModel):
     name: str
@@ -63,8 +78,52 @@ class SubscriptionCreate(BaseModel):
     user_email: str
 
 # Endpoints
+@app.post("/api/send-code")
+def send_code(req: EmailRequest, db: Session = Depends(get_db)):
+    code = str(random.randint(100000, 999999))
+    expires = int(datetime.utcnow().timestamp()) + 300 # 5 minutes valid
+    
+    db_code = VerificationCode(email=req.email, code=code, expires_at=expires)
+    db.add(db_code)
+    db.commit()
+    
+    # Send email (Real SMTP if configured, otherwise simulated in console)
+    smtp_server = os.getenv("SMTP_SERVER", "")
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_pass = os.getenv("SMTP_PASS", "")
+
+    if smtp_server and smtp_user and smtp_pass:
+        try:
+            msg = EmailMessage()
+            msg.set_content(f"Incle 회원가입 인증번호는 [{code}] 입니다.")
+            msg['Subject'] = "Incle 인증번호 안내"
+            msg['From'] = smtp_user
+            msg['To'] = req.email
+            with smtplib.SMTP(smtp_server, 587) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+        except Exception as e:
+            print(f"SMTP Error: {e}")
+    else:
+        # Fallback for demonstration/local runs without SMTP credentials
+        print(f"\n{'='*50}\n📧 [SIMULATED EMAIL] To: {req.email}\n👉 Auth Code: {code}\n{'='*50}\n")
+        
+    return {"message": "Verification code sent"}
+
 @app.post("/api/signup")
 def signup(user: UserCreate, db: Session = Depends(get_db)):
+    # Verify the code first
+    now = int(datetime.utcnow().timestamp())
+    valid_code = db.query(VerificationCode).filter(
+        VerificationCode.email == user.email,
+        VerificationCode.code == user.verification_code,
+        VerificationCode.expires_at > now
+    ).order_by(VerificationCode.id.desc()).first()
+
+    if not valid_code:
+        raise HTTPException(status_code=400, detail="인증번호가 일치하지 않거나 만료되었습니다.")
+        
     # Real DB Check
     db_user = db.query(DBUser).filter(DBUser.email == user.email).first()
     if db_user:

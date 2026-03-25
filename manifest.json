@@ -1,0 +1,16 @@
+{
+  "short_name": "Incle",
+  "name": "Incle - 구독 관리 대시보드",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "background_color": "#f8f9fa",
+  "orientation": "portrait"
+}

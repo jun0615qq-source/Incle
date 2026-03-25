@@ -3,54 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>구독 서비스 통합 관리 대시보드</title>
+    <title>Incle - 내 손안의 현명한 구독 관리</title>
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/favicon.ico">
+    <meta name="theme-color" content="#ffffff">
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
     
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Phosphor Icons (Premium alternative for Lucide in Vanilla) -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
     <div id="app">
         <!-- 1. Login Screen -->
         <div id="login-screen" class="screen active">
             <div class="login-container">
-                <div class="logo">
-                    <i class="ph-fill ph-infinity"></i>
-                    <h2>SubSync</h2>
-                    <p>당신의 모든 구독을 한눈에</p>
+                <!-- Login/Signup Form -->
+                <div class="auth-card">
+                    <h1 class="logo">Incle</h1>
+                    <h2 class="auth-title" id="auth-title">다시 오셨군요!</h2>
+                    <p class="auth-subtitle" id="auth-subtitle">이메일과 비밀번호를 입력해주세요.</p>
+                    
+                    <form id="auth-form" autocomplete="off">
+                        <div class="input-group" id="name-group" style="display: none;">
+                            <input type="text" id="auth-name" placeholder="이름 (예: 홍길동)">
+                        </div>
+                        <!-- Email + Verification Button -->
+                        <div class="input-group">
+                            <div style="display: flex; gap: 8px; width: 100%;">
+                                <input type="email" id="auth-email" placeholder="이메일" required style="flex: 1;">
+                                <button type="button" id="send-code-btn" class="btn btn-secondary" style="width: auto; padding: 0 14px; font-size: 13px; display: none;">인증번호 받기</button>
+                            </div>
+                        </div>
+                        <!-- Verification Code -->
+                        <div class="input-group" id="verify-code-group" style="display: none;">
+                            <input type="text" id="auth-code" placeholder="인증번호 6자리" maxlength="6">
+                        </div>
+                        <div class="input-group">
+                            <input type="password" id="auth-password" placeholder="비밀번호" required>
+                        </div>
+                        
+                        <div id="auth-error" class="auth-error-msg" style="display: none;"></div>
+                        
+                        <button type="submit" class="btn-primary" id="auth-btn">로그인하여 시작하기</button>
+                        
+                        <div class="auth-switch">
+                            <span id="switch-prompt">계정이 없으신가요?</span>
+                            <a href="#" id="auth-toggle-btn">회원가입</a>
+                        </div>
+                    </form>
                 </div>
-                
-                <form id="auth-form">
-                    <div id="auth-error" class="auth-error-msg" style="display: none;"></div>
-                    
-                    <div class="input-group" id="name-group" style="display: none;">
-                        <i class="ph ph-user"></i>
-                        <input type="text" placeholder="이름" id="name-input">
-                    </div>
-                    <div class="input-group">
-                        <i class="ph ph-envelope-simple"></i>
-                        <input type="email" placeholder="이메일 주소" required id="email-input">
-                    </div>
-                    <div class="input-group">
-                        <i class="ph ph-lock-key"></i>
-                        <input type="password" placeholder="비밀번호" required id="pwd-input">
-                    </div>
-                    
-                    <button type="submit" class="btn-primary" id="auth-btn">로그인하여 시작하기</button>
-                    
-                    <div class="auth-switch">
-                        <span id="switch-prompt">계정이 없으신가요?</span>
-                        <a href="#" id="auth-toggle-btn">회원가입</a>
-                    </div>
-                </form>
                 
                 <div class="security-badge">
                     <i class="ph-fill ph-shield-check"></i>
@@ -80,13 +89,13 @@
         <div id="dashboard-screen" class="screen">
             <!-- Header -->
             <header class="app-header">
-                <div>
-                    <h1>SubSync</h1>
-                    <p class="greeting">안녕하세요, <strong>유저</strong>님!</p>
+                <div class="header-main">
+                    <div>
+                        <h1 class="greeting">안녕하세요, <strong>유저</strong>님!</h1>
+                        <p class="subtitle">이번 달 구독 현황을 확인하세요.</p>
+                    </div>
                 </div>
-                <div class="avatar">
-                    <img src="https://ui-avatars.com/api/?name=User&background=111&color=fff&rounded=true" alt="User Avatar">
-                </div>
+                <div class="brand">Incle</div>
             </header>
 
             <!-- Dashboard Content Tabs -->
