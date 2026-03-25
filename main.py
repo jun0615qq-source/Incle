@@ -68,6 +68,11 @@ class UserLogin(BaseModel):
 class EmailRequest(BaseModel):
     email: str
 
+class PasswordReset(BaseModel):
+    email: str
+    verification_code: str
+    new_password: str
+
 class SubscriptionCreate(BaseModel):
     name: str
     price: int
@@ -140,6 +145,27 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not db_user or db_user.password != user.password:
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 일치하지 않습니다.")
     return {"message": "success", "user": {"email": db_user.email, "name": db_user.name}}
+
+@app.post("/api/reset-password")
+def reset_password(req: PasswordReset, db: Session = Depends(get_db)):
+    # Verify the code first
+    now = int(datetime.utcnow().timestamp())
+    valid_code = db.query(VerificationCode).filter(
+        VerificationCode.email == req.email,
+        VerificationCode.code == req.verification_code,
+        VerificationCode.expires_at > now
+    ).order_by(VerificationCode.id.desc()).first()
+
+    if not valid_code:
+        raise HTTPException(status_code=400, detail="인증번호가 일치하지 않거나 만료되었습니다.")
+        
+    db_user = db.query(DBUser).filter(DBUser.email == req.email).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="가입되지 않은 계정입니다.")
+        
+    db_user.password = req.new_password
+    db.commit()
+    return {"message": "비밀번호 변경 완료"}
 
 @app.post("/api/sync/{email}")
 def sync_mock_email(email: str, db: Session = Depends(get_db)):

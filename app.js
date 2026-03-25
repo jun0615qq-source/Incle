@@ -24,22 +24,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const nameInput = document.getElementById('auth-name');
     const emailInput = document.getElementById('auth-email');
     const pwdInput = document.getElementById('auth-password');
+    const pwdConfirmGroup = document.getElementById('pwd-confirm-group');
+    const pwdConfirmInput = document.getElementById('auth-password-confirm');
     const authError = document.getElementById('auth-error');
 
     const sendCodeBtn = document.getElementById('send-code-btn');
     const verifyCodeGroup = document.getElementById('verify-code-group');
     const authCodeInput = document.getElementById('auth-code');
+    const forgotPwdBtn = document.getElementById('forgot-pwd-btn');
     
-    let isSignupMode = false;
+    let authMode = 'login'; // 'login', 'signup', 'reset'
     let currentUserEmail = 'demo';
     let subscriptions = [];
     
     // ---- Logic ----
     
     // 1. Handle Authentication Toggle
-    function toggleAuthMode() {
-        isSignupMode = !isSignupMode;
-        if (isSignupMode) {
+    function setAuthMode(mode) {
+        authMode = mode;
+        if (mode === 'signup') {
             authTitle.textContent = 'Incle 시작하기';
             authSubtitle.textContent = '이메일 인증으로 안전하게 계정을 만드세요.';
             authBtn.textContent = '새 계정 만들기';
@@ -49,7 +52,24 @@ document.addEventListener('DOMContentLoaded', () => {
             sendCodeBtn.style.display = 'block';
             verifyCodeGroup.style.display = 'block';
             authCodeInput.required = true;
+            pwdConfirmGroup.style.display = 'block';
+            pwdConfirmInput.required = true;
+            forgotPwdBtn.style.display = 'none';
+        } else if (mode === 'reset') {
+            authTitle.textContent = '비밀번호 찾기';
+            authSubtitle.textContent = '이메일로 인증번호를 받아 비밀번호를 변경하세요.';
+            authBtn.textContent = '비밀번호 변경하기';
+            toggleText.innerHTML = '비밀번호가 기억나셨나요? <a href="#" id="auth-toggle-btn">로그인</a>';
+            nameGroup.style.display = 'none';
+            nameInput.required = false;
+            sendCodeBtn.style.display = 'block';
+            verifyCodeGroup.style.display = 'block';
+            authCodeInput.required = true;
+            pwdConfirmGroup.style.display = 'block';
+            pwdConfirmInput.required = true;
+            forgotPwdBtn.style.display = 'none';
         } else {
+            // 'login'
             authTitle.textContent = '다시 오셨군요!';
             authSubtitle.textContent = '이메일과 비밀번호를 입력해주세요.';
             authBtn.textContent = '로그인하여 시작하기';
@@ -59,6 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
             sendCodeBtn.style.display = 'none';
             verifyCodeGroup.style.display = 'none';
             authCodeInput.required = false;
+            pwdConfirmGroup.style.display = 'none';
+            pwdConfirmInput.required = false;
+            forgotPwdBtn.style.display = 'inline-block';
         }
         authError.style.display = 'none';
         authForm.reset();
@@ -66,14 +89,21 @@ document.addEventListener('DOMContentLoaded', () => {
         // Re-bind the toggle button since we replaced HTML
         document.getElementById('auth-toggle-btn').addEventListener('click', (e) => {
             e.preventDefault();
-            toggleAuthMode();
+            setAuthMode(authMode === 'login' ? 'signup' : 'login');
         });
     }
 
     if(toggleBtn) {
         toggleBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            toggleAuthMode();
+            setAuthMode(authMode === 'login' ? 'signup' : 'login');
+        });
+    }
+
+    if(forgotPwdBtn) {
+        forgotPwdBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            setAuthMode('reset');
         });
     }
 
@@ -112,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Form Submit (Signup or Login)
+    // Form Submit (Signup or Login or Reset)
     authForm.addEventListener('submit', (e) => {
         e.preventDefault();
         
@@ -120,9 +150,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const pwd = pwdInput.value;
         const name = nameInput.value.trim();
         const code = authCodeInput.value.trim();
+        const pwdConf = pwdConfirmInput.value;
 
-        const endpoint = isSignupMode ? '/api/signup' : '/api/login';
-        const payload = isSignupMode ? { email, password: pwd, name, verification_code: code } : { email, password: pwd };
+        // Validation for typo safeguard
+        if ((authMode === 'signup' || authMode === 'reset') && pwd !== pwdConf) {
+            authError.textContent = '비밀번호가 서로 일치하지 않습니다.';
+            authError.style.display = 'block';
+            return;
+        }
+
+        let endpoint = '/api/login';
+        let payload = { email, password: pwd };
+        
+        if (authMode === 'signup') {
+            endpoint = '/api/signup';
+            payload = { email, password: pwd, name, verification_code: code };
+        } else if (authMode === 'reset') {
+            endpoint = '/api/reset-password';
+            payload = { email, new_password: pwd, verification_code: code };
+        }
 
         authBtn.disabled = true;
         authBtn.textContent = '처리 중...';
@@ -138,13 +184,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 authError.textContent = data.detail || '오류가 발생했습니다.';
                 authError.style.display = 'block';
                 authBtn.disabled = false;
-                authBtn.textContent = isSignupMode ? '새 계정 만들기' : '로그인하여 시작하기';
+                authBtn.textContent = (authMode === 'signup') ? '새 계정 만들기' : (authMode === 'reset' ? '비밀번호 변경하기' : '로그인하여 시작하기');
             } else {
-                if (isSignupMode) {
+                if (authMode === 'signup') {
                     // Sign-up successful, DO NOT login instantly.
                     alert('회원가입이 완료되었습니다! 보안을 위해 로그인 창에서 새로 접속해 주세요.');
-                    toggleAuthMode();
+                    setAuthMode('login');
                     emailInput.value = email; // Pre-fill
+                    authBtn.disabled = false;
+                    authBtn.textContent = '로그인하여 시작하기';
+                } else if (authMode === 'reset') {
+                    alert('비밀번호가 성공적으로 변경되었습니다! 새 비밀번호로 로그인해 주세요.');
+                    setAuthMode('login');
+                    emailInput.value = email;
                     authBtn.disabled = false;
                     authBtn.textContent = '로그인하여 시작하기';
                 } else {
@@ -163,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             authError.textContent = '서버 통신 실패. (터미널에서 python main.py 로 백엔드가 켜져있나요?)';
             authError.style.display = 'block';
             authBtn.disabled = false;
-            authBtn.textContent = isSignupMode ? '새 계정 만들기' : '로그인하여 시작하기';
+            authBtn.textContent = (authMode === 'signup') ? '새 계정 만들기' : (authMode === 'reset' ? '비밀번호 변경하기' : '로그인하여 시작하기');
         });
     });
 
@@ -447,9 +499,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const addModal = document.getElementById('add-modal');
     const addSubForm = document.getElementById('add-sub-form');
 
+    const premiumModal = document.getElementById('premium-modal');
+    const closePremiumBtn = document.getElementById('close-premium-btn');
+
     if(openModalBtn && addModal) {
         openModalBtn.addEventListener('click', () => {
+            // Freemium Logic: Limit to 3 max
+            if (subscriptions.length >= 3) {
+                if(premiumModal) premiumModal.style.display = 'flex';
+                return;
+            }
             addModal.style.display = 'flex';
+        });
+    }
+
+    if(closePremiumBtn && premiumModal) {
+        closePremiumBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            premiumModal.style.display = 'none';
         });
     }
 
