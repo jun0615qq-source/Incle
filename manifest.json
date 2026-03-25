@@ -1,7 +1,9 @@
 {
+  "id": "/?source=pwa",
   "short_name": "Incle",
   "name": "Incle - 구독 관리 대시보드",
   "description": "내 손안의 현명한 구독 관리 대시보드. 넷플릭스, 유튜브 등 모든 구독 결제를 한눈에 확인하세요.",
+  "categories": ["finance", "productivity", "utilities"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -15,6 +17,22 @@
       "purpose": "any maskable"
     }
   ],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
   "start_url": "/",
   "display": "standalone",
   "theme_color": "#ffffff",
