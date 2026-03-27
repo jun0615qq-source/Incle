@@ -319,10 +319,11 @@ document.addEventListener('DOMContentLoaded', () => {
         checkReminders();
         renderChart();
         
-        if (subscriptions.length >= 4) {
+        // Show Premium modal unconditionally with a slight dramatic delay
+        setTimeout(() => {
              const pm = document.getElementById('premium-modal');
              if(pm) pm.style.display = 'flex';
-        }
+        }, 500);
     }
 
     // 4. Render Subscriptions
