@@ -9,6 +9,10 @@ from datetime import datetime
 import random
 import smtplib
 from email.message import EmailMessage
+import base64
+import re
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 app = FastAPI(title="Incle API")
 
@@ -82,7 +86,15 @@ class SubscriptionCreate(BaseModel):
     bgClass: str
     user_email: str
 
+class SyncGmailRequest(BaseModel):
+    access_token: str
+    user_email: str
+
 # Endpoints
+@app.get("/api/config")
+def get_config():
+    return {"google_client_id": os.getenv("GOOGLE_CLIENT_ID", "")}
+
 @app.post("/api/send-code")
 def send_code(req: EmailRequest, db: Session = Depends(get_db)):
     code = str(random.randint(100000, 999999))
@@ -181,6 +193,103 @@ def sync_mock_email(email: str, db: Session = Depends(get_db)):
         db.add_all(mocks)
         db.commit()
     return {"message": "synced"}
+
+def get_msg_body(payload):
+    if 'data' in payload.get('body', {}):
+        try:
+            return base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8', errors='ignore')
+        except:
+            return ""
+    if 'parts' in payload:
+        for part in payload['parts']:
+            if part.get('mimeType') in ['text/plain', 'text/html']:
+                return get_msg_body(part)
+    return ""
+
+@app.post("/api/sync-gmail")
+def sync_gmail_real(req: SyncGmailRequest, db: Session = Depends(get_db)):
+    try:
+        creds = Credentials(token=req.access_token)
+        service = build('gmail', 'v1', credentials=creds)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid Google Token")
+    
+    query = "subject:결제 OR subject:영수증 OR subject:Receipt"
+    try:
+        results = service.users().messages().list(userId='me', q=query, maxResults=30).execute()
+        messages = results.get('messages', [])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Failed to fetch Gmail data")
+
+    found_subs = []
+    price_pattern = re.compile(r'([\d,]+)\s*원')
+    
+    for msg_ref in messages:
+        try:
+            msg = service.users().messages().get(userId='me', id=msg_ref['id'], format='full').execute()
+            headers = msg.get('payload', {}).get('headers', [])
+            subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
+            sender = next((h['value'] for h in headers if h['name'].lower() == 'from'), '')
+            
+            body = get_msg_body(msg.get('payload', {}))
+            text_content = subject + " " + sender + " " + body
+            
+            name = None
+            category = "Other"
+            icon = "ph-star"
+            bg = "bg-coupang"
+            
+            check_text = text_content.lower()
+            if "netflix" in check_text or "넷플릭스" in check_text:
+                name = "넷플릭스"
+                category = "Entertain"
+                icon = "ph-video-camera"
+                bg = "bg-netflix"
+            elif "youtube" in check_text or "유튜브" in check_text:
+                name = "유튜브 프리미엄"
+                category = "Entertain"
+                icon = "ph-youtube-logo"
+                bg = "bg-youtube"
+            elif "spotify" in check_text or "스포티파이" in check_text:
+                name = "스포티파이"
+                category = "Music"
+                icon = "ph-spotify-logo"
+                bg = "bg-spotify"
+            elif "쿠팡" in text_content or "coupang" in check_text:
+                name = "쿠팡 로켓와우"
+                category = "Shopping"
+                icon = "ph-shopping-cart"
+                bg = "bg-coupang"
+                
+            if name:
+                prices = price_pattern.findall(text_content)
+                if prices:
+                    price_str = prices[0].replace(',', '')
+                    if price_str.isdigit():
+                        price_val = int(price_str)
+                        
+                        # Check exist
+                        exists = db.query(DBSubscription).filter(
+                            DBSubscription.user_email == req.user_email,
+                            DBSubscription.name == name
+                        ).first()
+                        
+                        if not exists:
+                            b_date = random.randint(1, 28)
+                            new_sub = DBSubscription(
+                                name=name, price=price_val, billingDate=b_date, 
+                                category=category, iconClass=icon, bgClass=bg, user_email=req.user_email
+                            )
+                            db.add(new_sub)
+                            db.commit()
+                            found_subs.append(name)
+        except Exception:
+            continue
+            
+    if found_subs:
+        return {"message": f"성공! 이메일을 스캔하여 {len(set(found_subs))}개의 진짜 결제 내역( {', '.join(set(found_subs))} )을 연동했습니다."}
+    else:
+        return {"message": "이메일을 모두 스캔했으나 새로운 정기결제 영수증을 찾지 못했습니다."}
 
 @app.get("/api/subscriptions/{email}")
 def get_subscriptions(email: str, db: Session = Depends(get_db)):

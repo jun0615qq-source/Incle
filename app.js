@@ -37,6 +37,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentUserEmail = 'demo';
     let subscriptions = [];
     
+    const rememberEmailCheckbox = document.getElementById('remember-email');
+    if(localStorage.getItem('incle_saved_email') && emailInput) {
+        emailInput.value = localStorage.getItem('incle_saved_email');
+        if(rememberEmailCheckbox) rememberEmailCheckbox.checked = true;
+    }
+
     // ---- Logic ----
     
     // 1. Handle Authentication Toggle
@@ -124,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({email})
                 });
                 if(res.ok) {
-                    alert('인증번호가 발송되었습니다.\n(참고: 데모 코드이므로 터미널/Render 로그에 6자리 번호가 출력됩니다)');
+                    alert('인증번호가 메일로 즉시 발송되었습니다!\n메일함(또는 스팸함)을 확인해주세요.');
                     verifyCodeGroup.style.display = 'block';
                     sendCodeBtn.textContent = '재전송';
                 } else {
@@ -202,6 +208,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     // Login successful
                     localStorage.setItem('subsync_user_' + email, JSON.stringify(data.user));
+                    if(rememberEmailCheckbox && rememberEmailCheckbox.checked) {
+                        localStorage.setItem('incle_saved_email', email);
+                    } else {
+                        localStorage.removeItem('incle_saved_email');
+                    }
                     
                     // Trigger sync here instead of signup
                     await fetch(`/api/sync/${email}`, { method: 'POST' }).catch(e=>console.log(e));
@@ -307,6 +318,11 @@ document.addEventListener('DOMContentLoaded', () => {
         calculateTotal();
         checkReminders();
         renderChart();
+        
+        if (subscriptions.length >= 4) {
+             const pm = document.getElementById('premium-modal');
+             if(pm) pm.style.display = 'flex';
+        }
     }
 
     // 4. Render Subscriptions
@@ -437,12 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cutout: '75%', // Thin donut
                 plugins: {
                     legend: {
-                        position: 'right',
-                        labels: {
-                            font: { family: "'Inter', sans-serif", size: 12 },
-                            usePointStyle: true,
-                            padding: 20
-                        }
+                        display: false
                     },
                     tooltip: {
                         backgroundColor: 'rgba(0,0,0,0.8)',
@@ -493,79 +504,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Add Modal Logic
-    const openModalBtn = document.getElementById('open-modal-btn');
-    const closeModalBtn = document.getElementById('close-modal-btn');
-    const addModal = document.getElementById('add-modal');
-    const addSubForm = document.getElementById('add-sub-form');
-
+    // Premium Modal Logic
     const premiumModal = document.getElementById('premium-modal');
     const closePremiumBtn = document.getElementById('close-premium-btn');
-
-    if(openModalBtn && addModal) {
-        openModalBtn.addEventListener('click', () => {
-            // Freemium Logic: Limit to 3 max
-            if (subscriptions.length >= 3) {
-                if(premiumModal) premiumModal.style.display = 'flex';
-                return;
-            }
-            addModal.style.display = 'flex';
-        });
-    }
 
     if(closePremiumBtn && premiumModal) {
         closePremiumBtn.addEventListener('click', (e) => {
             e.preventDefault();
             premiumModal.style.display = 'none';
-        });
-    }
-
-    if(closeModalBtn && addModal) {
-        closeModalBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            addModal.style.display = 'none';
-        });
-    }
-
-    if(addModal) {
-        addModal.addEventListener('click', (e) => {
-            if(e.target === addModal) addModal.style.display = 'none';
-        });
-    }
-
-    if(addSubForm) {
-        addSubForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('add-name').value;
-            const price = parseInt(document.getElementById('add-price').value, 10);
-            const date = parseInt(document.getElementById('add-date').value, 10);
-            
-            const newSub = {
-                id: null,
-                name: name,
-                price: price,
-                billingDate: date,
-                category: 'Custom',
-                iconClass: 'ph-star',
-                bgClass: 'bg-coupang',
-                user_email: currentUserEmail
-            };
-
-            try {
-                const res = await fetch('/api/subscriptions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newSub)
-                });
-                if(res.ok) {
-                    addModal.style.display = 'none';
-                    addSubForm.reset();
-                    // Refresh dash
-                    await fetchAndInitDashboard();
-                }
-            } catch (err) {
-                console.error("Failed to add sub", err);
-            }
         });
     }
 

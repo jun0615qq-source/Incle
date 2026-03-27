@@ -11,6 +11,8 @@
     
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Google Identity Services for Real Email Sync -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
@@ -41,6 +43,11 @@
                                 <input type="email" id="auth-email" placeholder="이메일" required style="flex: 1;">
                                 <button type="button" id="send-code-btn" class="btn btn-secondary" style="width: auto; padding: 0 14px; font-size: 13px; display: none;">인증번호 받기</button>
                             </div>
+                        </div>
+                        <div class="input-group" style="margin-top: -8px; margin-bottom: 8px;">
+                            <label style="font-size: 13px; color: var(--secondary); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="remember-email" style="width: 16px; height: 16px;"> 이메일 저장
+                            </label>
                         </div>
                         <!-- Verification Code -->
                         <div class="input-group" id="verify-code-group" style="display: none;">
@@ -106,41 +113,39 @@
             </header>
 
             <!-- Dashboard Content Tabs -->
-            <main class="dashboard-content tab-content active" id="tab-home">
+            <main class="dashboard-content tab-content active" id="tab-home" style="display: flex; flex-direction: column; height: 100%; overflow: hidden; padding-bottom: 0;">
                 <!-- Reminder Alert -->
-                <div class="alert-box" id="reminder-alert" style="display: none;">
-                    <div class="alert-icon"><i class="ph-fill ph-bell-ringing"></i></div>
-                    <div class="alert-text">
+                <div class="alert-box" id="reminder-alert" style="display: none; margin-bottom: 16px; padding: 12px;">
+                    <div class="alert-icon" style="width: 32px; height: 32px; font-size: 16px;"><i class="ph-fill ph-bell-ringing"></i></div>
+                    <div class="alert-text" style="font-size: 13px;">
                         <strong>넷플릭스</strong> 결제일이 곧 다가옵니다!
                     </div>
                 </div>
 
-                <!-- Subscriptions List -->
-                <section class="subscriptions-section">
-                    <h2 class="section-title">내 구독 목록 <span class="badge" id="sub-count">0</span></h2>
-                    <div class="subs-list" id="subs-list">
-                        <!-- Items injected by JS -->
-                    </div>
-                    <button class="btn-secondary add-btn" id="open-modal-btn">
-                        <i class="ph ph-plus"></i> 새로운 구독 추가
-                    </button>
-                </section>
-                <div class="spacing-bottom"></div>
-            </main>
-
-            <main class="dashboard-content tab-content" id="tab-stats" style="display: none;">
-                <!-- Analytics Section -->
-                <section class="analytics-section">
-                    <h2 class="section-title">월별 지출 분석</h2>
-                    <div class="total-card">
-                        <p>이번 달 총 결제 예정 금액</p>
-                        <h3 id="total-amount">₩0</h3>
-                    </div>
-                    <div class="chart-container">
+                <div class="total-card" style="margin: 0 24px 16px; padding: 20px; flex-shrink: 0;">
+                    <p>이번 달 총 결제 예정 금액</p>
+                    <h3 id="total-amount">₩0</h3>
+                </div>
+                
+                <div style="display: flex; gap: 16px; padding: 0 24px 16px; align-items: center; flex-shrink: 0;">
+                    <div class="chart-container" style="width: 120px; height: 120px; padding: 0; margin: 0;">
                         <canvas id="spendingChart"></canvas>
                     </div>
+                    <div style="flex: 1; height: 120px; display: flex;">
+                        <button class="btn-primary" id="google-sync-btn" style="width: 100%; border-radius: 16px; background-color: #4285F4; border: none; font-size: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0; height: 100%; box-shadow: var(--shadow-sm);">
+                            <i class="ph-bold ph-google-logo" style="font-size: 28px; margin-bottom: 8px;"></i>
+                            이메일 영수증<br>자동 연동하기
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Subscriptions List -->
+                <section class="subscriptions-section" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; margin-top: 8px;">
+                    <h2 class="section-title" style="margin-bottom: 12px; font-size: 16px;">내 구독 목록 <span class="badge" id="sub-count">0</span></h2>
+                    <div class="subs-list" id="subs-list" style="overflow-y: auto; flex: 1; padding: 0 24px 80px; gap: 8px;">
+                        <!-- Items injected by JS -->
+                    </div>
                 </section>
-                <div class="spacing-bottom"></div>
             </main>
 
             <main class="dashboard-content tab-content" id="tab-profile" style="display: none;">
@@ -160,37 +165,12 @@
                     <i class="ph-fill ph-house"></i>
                     <span>홈</span>
                 </a>
-                <a href="#" class="nav-item" data-tab="tab-stats">
-                    <i class="ph ph-chart-donut"></i>
-                    <span>통계</span>
-                </a>
+
                 <a href="#" class="nav-item" data-tab="tab-profile">
                     <i class="ph ph-user"></i>
                     <span>내 정보</span>
                 </a>
             </nav>
-        </div>
-    </div>
-
-    <!-- Adding New Subscription Modal -->
-    <div id="add-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="font-size:18px; font-weight:700;">새로운 구독 추가</h3>
-                <button class="close-modal-btn" id="close-modal-btn" style="background:none; border:none; font-size:24px; cursor:pointer;"><i class="ph ph-x"></i></button>
-            </div>
-            <form id="add-sub-form">
-                <div class="input-group" style="margin-bottom:12px;">
-                    <input type="text" id="add-name" placeholder="서비스 이름 (예: 넷플릭스)" required style="padding: 14px 16px;">
-                </div>
-                <div class="input-group" style="margin-bottom:12px;">
-                    <input type="number" id="add-price" placeholder="결제 금액 (예: 17000)" required style="padding: 14px 16px;">
-                </div>
-                <div class="input-group" style="margin-bottom:20px;">
-                    <input type="number" id="add-date" placeholder="결제일 (1~31)" min="1" max="31" required style="padding: 14px 16px;">
-                </div>
-                <button type="submit" class="btn-primary" style="width:100%;">추가하기</button>
-            </form>
         </div>
     </div>
 
@@ -202,10 +182,7 @@
             <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 14px;">무료 버전에서는 최대 3개의 구독만 추가할 수 있습니다.</p>
             
             <ul style="text-align: left; margin-bottom: 24px; line-height: 2.2; font-size: 15px; color: var(--text-main); list-style: none; padding-left: 0;">
-                <li><i class="ph-bold ph-check" style="color: #1DB954; margin-right: 12px;"></i>무제한 구독 서비스 관리</li>
-                <li><i class="ph-bold ph-check" style="color: #1DB954; margin-right: 12px;"></i>가족 공유 및 요금 N빵 정산 지원</li>
-                <li><i class="ph-bold ph-check" style="color: #1DB954; margin-right: 12px;"></i>결제 3일 전 카카오톡 맞춤형 알림</li>
-                <li><i class="ph-bold ph-check" style="color: #1DB954; margin-right: 12px;"></i>광고 없는 클린 대시보드 환경</li>
+                <li><i class="ph-bold ph-check" style="color: #1DB954; margin-right: 12px;"></i>만료일 3일 전 카카오톡 맞춤형 알림 설정</li>
             </ul>
             
             <button class="btn-primary" style="background-color: #1A1A1A; width: 100%; border-radius: 12px; margin-bottom: 8px;" onclick="window.alert('테스트 데모 버전입니다. 향후 결제 모듈(토스페이먼츠 등)이 연결됩니다.');">월 2,900원 결제하고 업그레이드</button>
