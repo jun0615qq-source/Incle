@@ -569,6 +569,79 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 8. Real Google API Sync Logic (Phase 7)
+    const googleSyncBtn = document.getElementById('google-sync-btn');
+    if(googleSyncBtn) {
+        googleSyncBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            // Fetch Google Client ID from backend config
+            let clientId = '';
+            try {
+                const confRes = await fetch('/api/config');
+                const confData = await confRes.json();
+                clientId = confData.google_client_id;
+            } catch(err) {
+                console.error(err);
+            }
+            
+            if (!clientId) {
+                alert("서버 환경설정에 구글 권한(GOOGLE_CLIENT_ID)이 등록되지 않았습니다.\n개발자(운영자) 최초 서버 셋팅이 필요합니다.");
+                return;
+            }
+
+            const tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: 'https://www.googleapis.com/auth/gmail.readonly',
+                callback: async (tokenResponse) => {
+                    if (tokenResponse && tokenResponse.access_token) {
+                        // show loading
+                        dashboardScreen.style.opacity = '0';
+                        setTimeout(() => {
+                            dashboardScreen.classList.remove('active');
+                            dashboardScreen.style.display = 'none';
+                            
+                            scanningScreen.style.display = 'flex';
+                            setTimeout(() => {
+                                scanningScreen.classList.add('active');
+                                scanningScreen.style.opacity = '1';
+                                scanningEmailText.innerHTML = `<strong>실제 이메일</strong> 수신함을 스캔하여<br>진짜 구독 결제 내역을 찾는 중입니다... 시간이 다소 소요됩니다.`;
+                            }, 50);
+                        }, 300);
+                        
+                        try {
+                            const sf = await fetch('/api/sync-gmail', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    access_token: tokenResponse.access_token,
+                                    user_email: currentUserEmail
+                                })
+                            });
+                            const sfData = await sf.json();
+                            
+                            scanningScreen.style.opacity = '0';
+                            setTimeout(() => {
+                                scanningScreen.style.display = 'none';
+                                scanningScreen.classList.remove('active');
+                                alert(sfData.message || (sfData.detail ? "오류: " + sfData.detail : "완료"));
+                                dashboardScreen.style.display = 'flex';
+                                dashboardScreen.style.opacity = '1';
+                                dashboardScreen.classList.add('active');
+                                fetchAndInitDashboard(); // refresh
+                            }, 500);
+
+                        } catch(apiErr) {
+                            scanningScreen.style.display = 'none';
+                            alert("이메일 분석 중 앗! 통신 오류가 발생했습니다.");
+                            location.reload();
+                        }
+                    }
+                },
+            });
+            tokenClient.requestAccessToken();
+        });
+    }
+
     // Logout logic
     const logoutBtn = document.getElementById('logout-btn');
     if(logoutBtn) {
